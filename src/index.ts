@@ -19,12 +19,27 @@ class BlogPost {
 
 const blogPostsStorage = StableBTreeMap<string, BlogPost>(0);
 
+// Utility function to get the current date
+function getCurrentDate(): Date {
+   return new Date(ic.time().toNumber() / 1000000);
+}
+
+// Utility function for sending error responses
+function sendError(res: express.Response, statusCode: number, message: string): void {
+   res.status(statusCode).json({ error: message });
+}
+
 export default Server(() => {
    const app = express();
    app.use(express.json());
 
    // Create a new blog post
    app.post("/posts", (req, res) => {
+      const { title, content } = req.body;
+      if (!title || !content) {
+         return sendError(res, 400, "Title and content are required.");
+      }
+      
       const post: BlogPost =  {id: uuidv4(), createdAt: getCurrentDate(), ...req.body};
       blogPostsStorage.insert(post.id, post);
       res.json(post);
@@ -40,10 +55,9 @@ export default Server(() => {
       const postId = req.params.id;
       const postOpt = blogPostsStorage.get(postId);
       if ("None" in postOpt) {
-         res.status(404).send(`Blog post with id=${postId} not found`);
-      } else {
-         res.json(postOpt.Some);
+         return sendError(res, 404, `Blog post with id=${postId} not found`);
       }
+      res.json(postOpt.Some);
    });
 
    // Update an existing blog post
@@ -51,13 +65,12 @@ export default Server(() => {
       const postId = req.params.id;
       const postOpt = blogPostsStorage.get(postId);
       if ("None" in postOpt) {
-         res.status(400).send(`Could not update blog post with id=${postId}. Post not found`);
-      } else {
-         const post = postOpt.Some;
-         const updatedPost = { ...post, ...req.body, updatedAt: getCurrentDate()};
-         blogPostsStorage.insert(post.id, updatedPost);
-         res.json(updatedPost);
+         return sendError(res, 400, `Could not update blog post with id=${postId}. Post not found`);
       }
+      const post = postOpt.Some;
+      const updatedPost = { ...post, ...req.body, updatedAt: getCurrentDate()};
+      blogPostsStorage.insert(post.id, updatedPost);
+      res.json(updatedPost);
    });
 
    // Delete a blog post
@@ -65,17 +78,10 @@ export default Server(() => {
       const postId = req.params.id;
       const deletedPost = blogPostsStorage.remove(postId);
       if ("None" in deletedPost) {
-         res.status(400).send(`Could not delete blog post with id=${postId}. Post not found`);
-      } else {
-         res.json(deletedPost.Some);
+         return sendError(res, 400, `Could not delete blog post with id=${postId}. Post not found`);
       }
+      res.json(deletedPost.Some);
    });
 
    return app.listen();
 });
-
-// Utility function to get the current date
-function getCurrentDate() {
-   const timestamp = new Number(ic.time());
-   return new Date(timestamp.valueOf() / 1000_000);
-}
